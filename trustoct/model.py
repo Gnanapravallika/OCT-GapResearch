@@ -99,7 +99,6 @@ class ResNetMSFCBAM(nn.Module):
 
 EXPERIMENTS = {
     "EXP001_baseline_resnet50": dict(use_msf=False, use_cbam=False),
-    "EXP002_resnet50_msf": dict(use_msf=True, use_cbam=False),
     "EXP003_resnet50_msf_cbam": dict(use_msf=True, use_cbam=True),
 }
 
@@ -120,11 +119,6 @@ def build_model(exp_name, num_classes=4, pretrained=True):
 def build_resnet50(num_classes=4, pretrained=True):
     """EXP001: plain ResNet50 baseline, no MSF, no CBAM."""
     return ResNetMSFCBAM(num_classes=num_classes, use_msf=False, use_cbam=False, pretrained=pretrained)
-
-
-def build_resnet50_msf(num_classes=4, pretrained=True):
-    """EXP002: ResNet50 + Multi-Scale Feature Fusion."""
-    return ResNetMSFCBAM(num_classes=num_classes, use_msf=True, use_cbam=False, pretrained=pretrained)
 
 
 def build_resnet50_msf_cbam(num_classes=4, pretrained=True):

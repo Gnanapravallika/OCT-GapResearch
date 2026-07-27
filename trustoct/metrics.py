@@ -1,8 +1,8 @@
 """
 trustoct.metrics
-Standard metrics table for the ablation (EXP001 vs EXP002 vs EXP003) — this is the
+Standard metrics table for the ablation (EXP001 vs EXP003) — this is the
 single most-referenced table in the paper, so get its computation airtight and
-identical across all three experiments.
+identical across experiments.
 """
 import numpy as np
 import pandas as pd

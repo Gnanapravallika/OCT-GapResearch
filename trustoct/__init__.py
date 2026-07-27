@@ -10,7 +10,7 @@ Insertion AOPC), and robustness to acquisition-noise perturbations.
 
 from trustoct.model import (
     build_model, ResNetMSFCBAM, TrustOCTNet, EXPERIMENTS,
-    build_resnet50, build_resnet50_msf, build_resnet50_msf_cbam,
+    build_resnet50, build_resnet50_msf_cbam,
 )
 from trustoct.data import (
     OCTDataset, build_transforms, index_kermany_folder, stratified_split,
@@ -28,7 +28,7 @@ from trustoct.external_validation import run_external_validation, index_external
 
 __all__ = [
     "build_model", "ResNetMSFCBAM", "TrustOCTNet", "EXPERIMENTS",
-    "build_resnet50", "build_resnet50_msf", "build_resnet50_msf_cbam",
+    "build_resnet50", "build_resnet50_msf_cbam",
     "OCTDataset", "build_transforms", "index_kermany_folder", "stratified_split",
     "patient_grouped_stratified_split", "assert_no_patient_leakage", "extract_patient_id",
     "download_kermany_dataset", "CLASSES",

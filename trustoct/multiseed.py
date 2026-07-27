@@ -1,6 +1,6 @@
 """
 trustoct.multiseed
-Statistical significance across the EXP001/002/003 ablation.
+Statistical significance across the ablation (EXP001 vs EXP003).
 
 A single run per experiment invites the obvious reviewer question: "is that
 accuracy difference meaningful, or noise?" This module trains each experiment
@@ -18,7 +18,7 @@ Usage (in the Colab notebook):
     )
 
 Note on cost: this multiplies total training time by len(seeds). With 3 seeds
-across 3 experiments that's 9 full training runs — budget Colab GPU time
+across 2 experiments that's 6 full training runs — budget Colab GPU time
 accordingly. If time is tight, 3 seeds is the minimum that's still defensible
 in a viva/review ("we repeated with 3 random seeds"); fewer than that, don't
 claim statistical significance at all — just report single-run numbers
@@ -64,7 +64,7 @@ def run_multiseed_ablation(train_ds, val_ds, test_ds, seeds=(42, 123, 2024),
                             weight_decay=1e-4, ckpt_dir="/content/checkpoints",
                             patience=5, verbose=True):
     """
-    Runs all three EXPERIMENTS across all seeds. Datasets are fixed across
+    Runs all EXPERIMENTS across all seeds. Datasets are fixed across
     seeds here (only model init + training stochasticity varies) — that's the
     correct design for "does the architecture reliably help," as opposed to
     also varying the data split, which would conflate two different sources
@@ -73,8 +73,7 @@ def run_multiseed_ablation(train_ds, val_ds, test_ds, seeds=(42, 123, 2024),
     Returns:
         per_run_df: one row per (experiment, seed) — the raw data.
         summary_df: mean ± std per experiment, ready for the paper's table.
-        significance: dict of paired-test results, EXP003 vs EXP001 and
-                      EXP003 vs EXP002, per metric.
+        significance: dict of paired-test results (e.g. EXP003 vs EXP001) per metric.
     """
     all_rows = []
     for exp_name in EXPERIMENTS:
