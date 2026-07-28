@@ -106,15 +106,51 @@ class OCTDataset(Dataset):
 
 
 def index_kermany_folder(root_train_dir):
-    """Scans OCT2017/train/{CLASS}/*.jpeg and returns (filepaths, labels)."""
-    filepaths, labels = [], []
-    for cls in CLASSES:
-        cls_dir = os.path.join(root_train_dir, cls)
-        files = sorted(glob.glob(os.path.join(cls_dir, "*.jpeg")) +
-                        glob.glob(os.path.join(cls_dir, "*.jpg")) +
-                        glob.glob(os.path.join(cls_dir, "*.png")))
-        filepaths += files
-        labels += [CLASS_TO_IDX[cls]] * len(files)
+    """Scans root_train_dir (or searches recursively) for OCT2017 class folders
+    (NORMAL, CNV, DME, DRUSEN) and returns (filepaths, labels)."""
+    def scan_dir(d):
+        fps, lbs = [], []
+        if not os.path.isdir(d):
+            return fps, lbs
+        subdirs = {entry.upper(): entry for entry in os.listdir(d)}
+        for cls in CLASSES:
+            if cls in subdirs:
+                cls_dir = os.path.join(d, subdirs[cls])
+                files = sorted(glob.glob(os.path.join(cls_dir, "*.jpeg")) +
+                                glob.glob(os.path.join(cls_dir, "*.jpg")) +
+                                glob.glob(os.path.join(cls_dir, "*.png")) +
+                                glob.glob(os.path.join(cls_dir, "*.JPEG")) +
+                                glob.glob(os.path.join(cls_dir, "*.JPG")) +
+                                glob.glob(os.path.join(cls_dir, "*.PNG")))
+                fps += files
+                lbs += [CLASS_TO_IDX[cls]] * len(files)
+        return fps, lbs
+
+    filepaths, labels = scan_dir(root_train_dir)
+
+    # If nothing found directly, search recursively up to 3 levels deep
+    if len(filepaths) == 0:
+        parent_dir = os.path.dirname(root_train_dir) if root_train_dir else ""
+        search_roots = [root_train_dir, parent_dir, os.path.dirname(parent_dir)]
+        for root in search_roots:
+            if root and os.path.exists(root):
+                for dirpath, dirnames, _ in os.walk(root):
+                    dirnames_upper = [d.upper() for d in dirnames]
+                    if any(c in dirnames_upper for c in CLASSES):
+                        fps, lbs = scan_dir(dirpath)
+                        if len(fps) > 0:
+                            filepaths, labels = fps, lbs
+                            break
+            if len(filepaths) > 0:
+                break
+
+    if len(filepaths) == 0:
+        raise RuntimeError(
+            f"No OCT images found in '{root_train_dir}'. "
+            f"Expected subfolders for classes {CLASSES} containing .jpeg/.png images."
+        )
+
+    print(f"Total images found: {len(filepaths)}")
     return filepaths, labels
 
 
