@@ -67,14 +67,35 @@ class LayerCAM:
         cam = (cam - cam.min()) / (cam.max() - cam.min() + 1e-8)
 
         return cam, class_idx, float(probs[0, class_idx].item())
-def overlay_cam_on_image(image_np, cam, alpha=0.6, threshold=0.15):
-    """Focused focal overlay: suppresses low-level background noise and highlights
-    pathology/lesion areas in vibrant red/yellow/green over the sharp grayscale B-scan."""
-    cam_focused = np.clip((cam - threshold) / (1.0 - threshold + 1e-8), 0, 1)
-    cam_focused = np.power(cam_focused, 1.5)  # Focus peak activations
+def clean_cam_noise(cam, threshold=0.25, use_bilateral=True):
+    """Applies Bilateral Filtering (edge-preserving noise removal) and clears CNN
+    border padding artifacts and background speckle noise from raw LayerCAM maps."""
+    cam_uint8 = np.uint8(255 * cam)
+    if use_bilateral:
+        cam_uint8 = cv2.bilateralFilter(cam_uint8, d=9, sigmaColor=75, sigmaSpace=75)
 
-    heatmap = cm.get_cmap("jet")(cam_focused)[:, :, :3]
-    weight = alpha * cam_focused[..., None]
+    cam_clean = cam_uint8.astype(np.float32) / 255.0
+
+    # Clear CNN padding border artifacts (5% outer margin)
+    h, w = cam_clean.shape
+    b_h, b_w = int(h * 0.05), int(w * 0.05)
+    cam_clean[:b_h, :] = 0
+    cam_clean[-b_h:, :] = 0
+    cam_clean[:, :b_w] = 0
+    cam_clean[:, -b_w:] = 0
+
+    # Threshold low-level background noise
+    cam_clean = np.clip((cam_clean - threshold) / (1.0 - threshold + 1e-8), 0, 1)
+    cam_clean = np.power(cam_clean, 1.8)
+    return cam_clean
+
+
+def overlay_cam_on_image(image_np, cam, alpha=0.6, threshold=0.25):
+    """Applies bilateral noise cleaning and blends the focused pathology highlight
+    vibrantly over the sharp grayscale B-scan background."""
+    cam_clean = clean_cam_noise(cam, threshold=threshold, use_bilateral=True)
+    heatmap = cm.get_cmap("jet")(cam_clean)[:, :, :3]
+    weight = alpha * cam_clean[..., None]
     overlay = image_np * (1.0 - weight) + heatmap * weight
     return np.clip(overlay, 0, 1)
 
@@ -91,17 +112,6 @@ def _predict_prob(model, image_tensor, class_idx):
 
 def deletion_insertion_curves(model, image_tensor, cam, class_idx, device,
                                 num_steps=20, baseline_value=0.0):
-    """Ranks pixels by CAM importance (descending), then:
-      - Deletion: progressively replaces the *most* important pixels with
-        `baseline_value` (mean-normalized black) and re-scores -> a faithful CAM
-        should cause a STEEP drop (low AOPC = good deletion behavior, i.e. area
-        UNDER the curve is small).
-      - Insertion: starts from a blank image and progressively reveals the *most*
-        important pixels first -> a faithful CAM should cause a STEEP rise
-        (high AOPC = good insertion behavior).
-    Returns (deletion_scores, insertion_scores, del_aopc, ins_aopc) where AOPC is
-    computed as area-over/under the respective curve using the trapezoidal rule.
-    """
     model.eval()
     img = image_tensor.clone().to(device)  # [1, C, H, W]
     C, H, W = img.shape[1], img.shape[2], img.shape[3]
@@ -166,7 +176,7 @@ def faithfulness_report(model, cam_engine, loader, device, num_samples=50, num_s
 
 
 def plot_cam_grid(images_np, cams, titles, save_path=None):
-    """Paper-quality qualitative grid: Original B-Scan | Focused LayerCAM | Focused Overlay."""
+    """Paper-quality qualitative grid: Original B-Scan | Bilateral Cleaned LayerCAM | Focal Overlay."""
     n = len(images_np)
     if n == 0:
         print("Warning: plot_cam_grid received 0 images. Skipping plot creation.")
@@ -184,15 +194,14 @@ def plot_cam_grid(images_np, cams, titles, save_path=None):
         axes[i, 0].set_title(f"{titles[i]}\nOriginal B-Scan", fontsize=10)
         axes[i, 0].axis("off")
 
-        # Focused standalone CAM with dark background
-        cam_focused = np.clip((cams[i] - 0.15) / 0.85, 0, 1)
-        cam_focused = np.power(cam_focused, 1.5)
-        axes[i, 1].imshow(cam_focused, cmap="jet")
-        axes[i, 1].set_title("LayerCAM Heatmap", fontsize=10)
+        # Bilateral noise cleaned CAM heatmap
+        cam_clean = clean_cam_noise(cams[i], threshold=0.25, use_bilateral=True)
+        axes[i, 1].imshow(cam_clean, cmap="jet")
+        axes[i, 1].set_title("LayerCAM (Bilateral Denoised)", fontsize=10)
         axes[i, 1].axis("off")
 
-        # Focused overlay on sharp B-scan
-        overlay = overlay_cam_on_image(images_np[i], cams[i], alpha=0.6, threshold=0.15)
+        # Focal overlay on crisp B-scan image
+        overlay = overlay_cam_on_image(images_np[i], cams[i], alpha=0.6, threshold=0.25)
         axes[i, 2].imshow(overlay)
         axes[i, 2].set_title("LayerCAM Overlay", fontsize=10)
         axes[i, 2].axis("off")
