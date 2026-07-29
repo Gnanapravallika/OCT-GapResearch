@@ -169,6 +169,14 @@ def plot_cam_grid(images_np, cams, titles, save_path=None):
     """Small qualitative grid: original | heatmap | overlay, for 4-6 examples
     (your Phase-4 failure-analysis figure can reuse this too)."""
     n = len(images_np)
+    if n == 0:
+        print("Warning: plot_cam_grid received 0 images. Skipping plot creation.")
+        fig, ax = plt.subplots(figsize=(4, 2))
+        ax.text(0.5, 0.5, "No samples available", ha='center', va='center', fontsize=12)
+        ax.axis("off")
+        if save_path:
+            fig.savefig(save_path, dpi=200)
+        return fig
     fig, axes = plt.subplots(n, 3, figsize=(9, 3 * n))
     if n == 1:
         axes = axes[None, :]
