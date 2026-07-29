@@ -84,6 +84,9 @@ def evaluate_under_perturbation(model, loader, device, mean, std, severities=(1,
                 preds = logits.argmax(dim=1).cpu().numpy()
                 all_preds.append(preds)
                 all_labels.append(labels.numpy())
+            if len(all_labels) == 0:
+                print(f"Warning: loader yielded 0 samples for perturbation '{name}' severity {sev}.")
+                continue
             y_true = np.concatenate(all_labels)
             y_pred = np.concatenate(all_preds)
             results.append({
