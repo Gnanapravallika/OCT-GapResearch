@@ -67,13 +67,15 @@ class LayerCAM:
         cam = (cam - cam.min()) / (cam.max() - cam.min() + 1e-8)
 
         return cam, class_idx, float(probs[0, class_idx].item())
+def overlay_cam_on_image(image_np, cam, alpha=0.6, threshold=0.15):
+    """Focused focal overlay: suppresses low-level background noise and highlights
+    pathology/lesion areas in vibrant red/yellow/green over the sharp grayscale B-scan."""
+    cam_focused = np.clip((cam - threshold) / (1.0 - threshold + 1e-8), 0, 1)
+    cam_focused = np.power(cam_focused, 1.5)  # Focus peak activations
 
-
-def overlay_cam_on_image(image_np, cam, alpha=0.45, colormap="jet"):
-    """image_np: [H, W, 3] float in [0,1]. cam: [H, W] float in [0,1].
-    Returns an RGB overlay for the figure in your paper."""
-    heatmap = cm.get_cmap(colormap)(cam)[:, :, :3]
-    overlay = (1 - alpha) * image_np + alpha * heatmap
+    heatmap = cm.get_cmap("jet")(cam_focused)[:, :, :3]
+    weight = alpha * cam_focused[..., None]
+    overlay = image_np * (1.0 - weight) + heatmap * weight
     return np.clip(overlay, 0, 1)
 
 
@@ -88,7 +90,7 @@ def _predict_prob(model, image_tensor, class_idx):
 
 
 def deletion_insertion_curves(model, image_tensor, cam, class_idx, device,
-                               num_steps=20, baseline_value=0.0):
+                                num_steps=20, baseline_value=0.0):
     """Ranks pixels by CAM importance (descending), then:
       - Deletion: progressively replaces the *most* important pixels with
         `baseline_value` (mean-normalized black) and re-scores -> a faithful CAM
@@ -139,13 +141,11 @@ def deletion_insertion_curves(model, image_tensor, cam, class_idx, device,
 
 
 def faithfulness_report(model, cam_engine, loader, device, num_samples=50, num_steps=20):
-    """Runs deletion/insertion AOPC over a random subset of the test set (full test
-    set is expensive: num_samples x num_steps x 2 forward passes each). Returns
-    mean deletion AOPC (lower=better) and mean insertion AOPC (higher=better) —
-    the two numbers that go in your Phase-3 table next to the ECE/Brier numbers."""
+    """Runs deletion/insertion AOPC over a random subset of the test set."""
     del_aopcs, ins_aopcs = [], []
     seen = 0
-    for images, labels, _ in loader:
+    for batch in loader:
+        images = batch[0]
         for i in range(images.size(0)):
             if seen >= num_samples:
                 break
@@ -159,15 +159,14 @@ def faithfulness_report(model, cam_engine, loader, device, num_samples=50, num_s
         if seen >= num_samples:
             break
     return {
-        "mean_deletion_aopc": float(np.mean(del_aopcs)),
-        "mean_insertion_aopc": float(np.mean(ins_aopcs)),
+        "mean_deletion_aopc": float(np.mean(del_aopcs)) if len(del_aopcs) > 0 else float("nan"),
+        "mean_insertion_aopc": float(np.mean(ins_aopcs)) if len(ins_aopcs) > 0 else float("nan"),
         "n_samples": seen,
     }
 
 
 def plot_cam_grid(images_np, cams, titles, save_path=None):
-    """Small qualitative grid: original | heatmap | overlay, for 4-6 examples
-    (your Phase-4 failure-analysis figure can reuse this too)."""
+    """Paper-quality qualitative grid: Original B-Scan | Focused LayerCAM | Focused Overlay."""
     n = len(images_np)
     if n == 0:
         print("Warning: plot_cam_grid received 0 images. Skipping plot creation.")
@@ -177,14 +176,27 @@ def plot_cam_grid(images_np, cams, titles, save_path=None):
         if save_path:
             fig.savefig(save_path, dpi=200)
         return fig
-    fig, axes = plt.subplots(n, 3, figsize=(9, 3 * n))
+    fig, axes = plt.subplots(n, 3, figsize=(10, 3.2 * n))
     if n == 1:
         axes = axes[None, :]
     for i in range(n):
-        axes[i, 0].imshow(images_np[i]); axes[i, 0].set_title(f"{titles[i]} - input"); axes[i, 0].axis("off")
-        axes[i, 1].imshow(cams[i], cmap="jet"); axes[i, 1].set_title("LayerCAM"); axes[i, 1].axis("off")
-        overlay = overlay_cam_on_image(images_np[i], cams[i])
-        axes[i, 2].imshow(overlay); axes[i, 2].set_title("Overlay"); axes[i, 2].axis("off")
+        axes[i, 0].imshow(images_np[i])
+        axes[i, 0].set_title(f"{titles[i]}\nOriginal B-Scan", fontsize=10)
+        axes[i, 0].axis("off")
+
+        # Focused standalone CAM with dark background
+        cam_focused = np.clip((cams[i] - 0.15) / 0.85, 0, 1)
+        cam_focused = np.power(cam_focused, 1.5)
+        axes[i, 1].imshow(cam_focused, cmap="jet")
+        axes[i, 1].set_title("LayerCAM Heatmap", fontsize=10)
+        axes[i, 1].axis("off")
+
+        # Focused overlay on sharp B-scan
+        overlay = overlay_cam_on_image(images_np[i], cams[i], alpha=0.6, threshold=0.15)
+        axes[i, 2].imshow(overlay)
+        axes[i, 2].set_title("LayerCAM Overlay", fontsize=10)
+        axes[i, 2].axis("off")
+
     fig.tight_layout()
     if save_path:
         fig.savefig(save_path, dpi=200)
