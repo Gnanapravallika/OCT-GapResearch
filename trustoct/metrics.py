@@ -87,4 +87,5 @@ def build_ablation_table(results_dict, num_classes=4):
 
 
 def print_classwise_report(y_true, y_pred, class_names):
-    print(classification_report(y_true, y_pred, target_names=class_names, digits=4))
+    labels = list(range(len(class_names)))
+    print(classification_report(y_true, y_pred, labels=labels, target_names=class_names, digits=4, zero_division=0))
