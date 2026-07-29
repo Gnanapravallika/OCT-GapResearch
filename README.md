@@ -8,19 +8,24 @@ A trustworthy-AI **evaluation framework** for Optical Coherence Tomography (OCT)
 
 ## ⚡ Quickstart Options for Google Colab
 
-### Option 1: Multi-Account / Split-Session Workflow (Recommended for Colab GPU limits)
+### Option 1: 3-Notebook Modular Workflow (Recommended for Colab GPU limits)
 
-To avoid free Google Colab GPU disconnects and usage limits, training can be split across two separate accounts/sessions connected via Google Drive:
+To avoid free Google Colab GPU disconnects and usage limits, training and evaluation are split into 3 modular notebooks connected via Google Drive:
 
 1. **Account 1 — `TrustOCT_Account1_Baseline_EXP001.ipynb`**
    - Mounts Google Drive (`/content/drive/MyDrive/TrustOCT_Results`).
    - Downloads dataset and trains **EXP001 Baseline ResNet50**.
-   - Saves model weights, predictions, and history to Google Drive.
+   - Saves model weights, predictions (`exp001_predictions.npz`), and history to Google Drive.
 
 2. **Account 2 — `TrustOCT_Account2_Reference_EXP003.ipynb`**
-   - Mounts Google Drive and loads EXP001 predictions from Account 1.
-   - Trains **EXP003 Reference Model (ResNet50 + MSF + CBAM)**.
-   - Generates the full **Ablation Table**, **ECE & Reliability Diagrams**, **LayerCAM AOPC**, and **Robustness Metrics**.
+   - Mounts Google Drive.
+   - Downloads dataset and trains **EXP003 Reference Model (ResNet50 + MSF + CBAM)**.
+   - Saves model weights (`EXP003_resnet50_msf_cbam_best.pt`), predictions (`exp003_predictions.npz`), and history to Google Drive.
+
+3. **Account 3 — `TrustOCT_Account3_Full_Evaluation.ipynb` (NEW — Zero GPU Training Required)**
+   - Mounts Google Drive and loads EXP001 & EXP003 results from Drive.
+   - Runs in **just 1–2 minutes** with zero risk of timing out!
+   - Generates the full **Ablation Table**, **McNemar Test & Bootstrap CIs**, **ECE & Reliability Diagrams**, **LayerCAM AOPC**, **Noise Robustness Metrics**, **Compute Cost**, **Failure Case Gallery**, **External Validation**, and saves `trustoct_results.zip` to Google Drive.
 
 ---
 
@@ -37,8 +42,9 @@ To avoid free Google Colab GPU disconnects and usage limits, training can be spl
 OCT-GapResearch/
 │── README.md                                 # Framework & setup documentation
 │── TrustOCT_Kermany_Colab.ipynb              # Combined single-session notebook
-│── TrustOCT_Account1_Baseline_EXP001.ipynb   # Dedicated notebook for Account 1 (Baseline)
-│── TrustOCT_Account2_Reference_EXP003.ipynb  # Dedicated notebook for Account 2 (Reference + Eval)
+│── TrustOCT_Account1_Baseline_EXP001.ipynb   # Dedicated notebook for Account 1 (EXP001 Training)
+│── TrustOCT_Account2_Reference_EXP003.ipynb  # Dedicated notebook for Account 2 (EXP003 Training)
+│── TrustOCT_Account3_Full_Evaluation.ipynb   # Dedicated notebook for Account 3 (Full Evaluation - Fast!)
 └── trustoct/                                 # TrustOCT Python package
     ├── __init__.py                           # Public API exports
     ├── data.py                               # CLAHE preprocessing, Kermany dataset indexing & patient-grouped splits
