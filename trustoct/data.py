@@ -185,69 +185,59 @@ _warned_ungrouped = False
 
 def patient_grouped_stratified_split(filepaths, labels, val_frac=0.10, test_frac=0.10,
                                       seed=42, max_per_class=None):
-    """Stratified split by class AND grouped by patient, so no patient's images
-    appear in more than one of train/val/test. This is the split you should
-    use for any number you intend to report or publish — a plain per-image
-    split (see `stratified_split` below, kept only for quick experimentation)
-    silently inflates test accuracy via patient leakage.
-
-    Algorithm per class: group filepaths by patient ID, shuffle the patient
-    groups (not the individual images), then greedily assign whole patient
-    groups to test -> val -> train until each split's image-count target is
-    reached. Patients (not images) are the unit being split, so the final
-    image counts will approximate but not exactly hit val_frac/test_frac
-    (patients have different numbers of scans).
-
-    max_per_class: caps images per class by keeping whole patient groups
-    (never splits a patient's images across the cap boundary) up to
-    approximately max_per_class images.
-    """
+    """Stratified split by class AND grouped globally by patient ID, so no patient's
+    images appear in more than one of train/val/test across any class."""
     global _warned_ungrouped
     rng = random.Random(seed)
 
-    # class -> patient_id -> [filepaths]
-    by_class_patient = {i: {} for i in range(len(CLASSES))}
+    # 1. Group all images by patient ID globally
+    patient_to_items = {}
     ungrouped_count = 0
     for fp, lb in zip(filepaths, labels):
         pid = extract_patient_id(fp)
         basename = os.path.basename(fp)
         if not _PATIENT_ID_PATTERN.match(basename):
             ungrouped_count += 1
-        by_class_patient[lb].setdefault(pid, []).append(fp)
+        patient_to_items.setdefault(pid, []).append((fp, lb))
 
     if ungrouped_count > 0 and not _warned_ungrouped:
-        print(f"WARNING: {ungrouped_count} filenames didn't match the expected "
-              f"Kermany 'CLASS-patientID-index.ext' pattern and could not be "
-              f"grouped by patient — leakage protection is NOT active for them. "
-              f"Inspect a few filenames if this number is large.")
+        print(f"WARNING: {ungrouped_count} filenames didn't match expected pattern.")
         _warned_ungrouped = True
+
+    # 2. Group patient IDs by primary label (majority vote) for stratification
+    by_class_patients = {i: [] for i in range(len(CLASSES))}
+    for pid, items in patient_to_items.items():
+        lbs = [lb for _, lb in items]
+        majority_lb = max(set(lbs), key=lbs.count)
+        by_class_patients[majority_lb].append(pid)
 
     train_fp, train_lb = [], []
     val_fp, val_lb = [], []
     test_fp, test_lb = [], []
     patient_counts = {"train": 0, "val": 0, "test": 0}
 
-    for cls_idx, patient_dict in by_class_patient.items():
-        patient_ids = list(patient_dict.keys())
+    # 3. Split whole patient groups into test -> val -> train per class
+    for cls_idx, patient_ids in by_class_patients.items():
         rng.shuffle(patient_ids)
 
         if max_per_class is not None:
             capped_ids, running_total = [], 0
             for pid in patient_ids:
+                n_imgs = len(patient_to_items[pid])
                 if running_total >= max_per_class:
                     break
                 capped_ids.append(pid)
-                running_total += len(patient_dict[pid])
+                running_total += n_imgs
             patient_ids = capped_ids
 
-        total_images = sum(len(patient_dict[pid]) for pid in patient_ids)
+        total_images = sum(len(patient_to_items[pid]) for pid in patient_ids)
         target_val = int(total_images * val_frac)
         target_test = int(total_images * test_frac)
 
         val_ids, test_ids, train_ids = [], [], []
         running = 0
         for pid in patient_ids:
-            n_imgs = len(patient_dict[pid])
+            n_imgs = len(patient_to_items[pid])
             if running < target_test:
                 test_ids.append(pid)
             elif running < target_test + target_val:
@@ -257,11 +247,17 @@ def patient_grouped_stratified_split(filepaths, labels, val_frac=0.10, test_frac
             running += n_imgs
 
         for pid in train_ids:
-            train_fp += patient_dict[pid]; train_lb += [cls_idx] * len(patient_dict[pid])
+            for fp, lb in patient_to_items[pid]:
+                train_fp.append(fp)
+                train_lb.append(lb)
         for pid in val_ids:
-            val_fp += patient_dict[pid]; val_lb += [cls_idx] * len(patient_dict[pid])
+            for fp, lb in patient_to_items[pid]:
+                val_fp.append(fp)
+                val_lb.append(lb)
         for pid in test_ids:
-            test_fp += patient_dict[pid]; test_lb += [cls_idx] * len(patient_dict[pid])
+            for fp, lb in patient_to_items[pid]:
+                test_fp.append(fp)
+                test_lb.append(lb)
 
         patient_counts["train"] += len(train_ids)
         patient_counts["val"] += len(val_ids)
