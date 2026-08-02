@@ -20,7 +20,7 @@ import torch
 from torch.utils.data import Dataset
 from torchvision import transforms
 
-CLASSES = ["NORMAL", "CNV", "DME", "DRUSEN"]
+CLASSES = ["CNV", "DME", "DRUSEN", "NORMAL"]
 CLASS_TO_IDX = {c: i for i, c in enumerate(CLASSES)}
 
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
