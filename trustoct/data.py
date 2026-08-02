@@ -175,7 +175,7 @@ def extract_patient_id(filepath):
     basename = os.path.basename(filepath)
     m = _PATIENT_ID_PATTERN.match(basename)
     if m:
-        return m.group(2)  # numeric patient ID
+        return f"{m.group(1)}-{m.group(2)}"  # class-prefixed patient ID (e.g. 'CNV-1016042')
     parent_dir = os.path.basename(os.path.dirname(filepath))
     return f"{parent_dir}/{basename}"  # unrecognized pattern -> no real grouping, but namespaced
 
